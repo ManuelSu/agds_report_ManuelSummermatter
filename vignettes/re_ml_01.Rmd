@@ -1,0 +1,311 @@
+---
+title: "9.4 Report Exercise"
+author: "Manuel Summermatter"
+date: "2023-05-15"
+output: html_document
+---
+First, I set up the work space
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(lubridate)
+library(caret)
+library(recipes)
+source(paste0(here::here(), "/R/eval_model.R"))
+```
+
+# Comparison of the linear regression and KNN models
+
+Now, I load and prepare the data (adopted from the chapter)
+```{r}
+daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
+  
+  # select only the variables we are interested in
+  dplyr::select(TIMESTAMP,
+                GPP_NT_VUT_REF,    # the target
+                ends_with("_QC"),  # quality control info
+                ends_with("_F"),   # includes all meteorological covariates
+                -contains("JSB")   # weird useless variable
+                ) |>
+
+  # convert to a nice date object
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+
+  # set all -9999 to NA
+  dplyr::na_if(-9999) |> # NOTE: Newer tidyverse version no longer support this statement
+                         # instead, use `mutate(across(where(is.numeric), ~na_if(., -9999))) |> `
+  
+  # retain only data based on >=80% good-quality measurements
+  # overwrite bad data with NA (not dropping rows)
+  dplyr::mutate(GPP_NT_VUT_REF = ifelse(NEE_VUT_REF_QC < 0.8, NA, GPP_NT_VUT_REF),
+                TA_F           = ifelse(TA_F_QC        < 0.8, NA, TA_F),
+                SW_IN_F        = ifelse(SW_IN_F_QC     < 0.8, NA, SW_IN_F),
+                LW_IN_F        = ifelse(LW_IN_F_QC     < 0.8, NA, LW_IN_F),
+                VPD_F          = ifelse(VPD_F_QC       < 0.8, NA, VPD_F),
+                PA_F           = ifelse(PA_F_QC        < 0.8, NA, PA_F),
+                P_F            = ifelse(P_F_QC         < 0.8, NA, P_F),
+                WS_F           = ifelse(WS_F_QC        < 0.8, NA, WS_F)) |> 
+
+  # drop QC variables (no longer needed)
+  dplyr::select(-ends_with("_QC"))
+```
+
+Now, I get an overview of the data
+```{r}
+daily_fluxes |> 
+  ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
+  geom_histogram()
+```
+
+What follows are further steps
+```{r}
+# Data splitting
+set.seed(1982)  # for reproducibility
+split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
+daily_fluxes_train <- rsample::training(split)
+daily_fluxes_test <- rsample::testing(split)
+
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+# Fit linear regression model
+mod_lm <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "lm",
+  trControl = caret::trainControl(method = "none"),
+  metric = "RMSE"
+)
+
+# Fit KNN model
+mod_knn <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+```
+
+Now, I call the model evaluation function which I loaded into the work space in the beginning
+```{r}
+# Linear regression model
+eval_model(mod = mod_lm, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+
+# KNN
+eval_model(mod = mod_knn, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+```
+
+## 2. Interpretation of observed differences
+The observation that the difference between the evaluation on the training and the test set is larger for the KNN model than for the linear regression model means that the variance of the KNN model is larger than the variance of the linear model. In the light of the bias-variance trade-off, this in turn means that the bias of the KNN model is smaller than of the linear model. This makes sense as the KNN model is more precise than the linear model, which leads to a smaller bias.  
+
+The KNN model suits better in explaining the underlying relationship in the data. This can be seen when observing the R squared values. The KNN model has, for both the training and the test set, larger values of R squared than the linear regression model. This leads to the fact that the KNN model has a better performance on the test set. The higher variance of the KNN model, so the bigger difference from training to test set, cannot change this circumstance, but it makes things less clear on the test set compared to the training set.  
+
+On a spectrum of the bias-variance trade-off, the linear regression model has a high bias and a low variance, and the KNN model has a low bias and a high variance.
+
+## 3. Visualising temporal variations of observed and modelled GPP
+```{r}
+
+# daily_fluxes_train$fitted_lm <- predict(mod_lm, newdata = daily_fluxes_train)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pp_plot <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = daily_fluxes_train) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+# Fit linear regression model
+mod_lm_plot <- caret::train(
+  pp_plot, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "lm",
+  trControl = caret::trainControl(method = "none"),
+  metric = "RMSE"
+)
+
+# Fit KNN model
+mod_knn_plot <- caret::train(
+  pp_plot, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+
+#daily_fluxes |>
+ # ggplot(aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
+  #geom_line(aes(color = "black")) +
+ # geom_line(aes(x = TIMESTAMP, y = predict(mod_lm_plot, daily_fluxes_test), color = "red")) +
+  #geom_line(aes(x = TIMESTAMP, y = predict(mod_knn_plot, daily_fluxes_test), color = "green")) +
+ # labs(x = "Time", y = "GPP") +
+  #scale_color_manual()
+
+
+
+
+#ggplot() +
+  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF), color = "black") +
+  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = predict(mod_lm_plot, daily_fluxes_train)), color = "red") +
+  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = predict(mod_knn_plot, daily_fluxes_train)), color = "green") +
+  #labs(x = "Time", y = "GPP") +
+  #scale_color_manual()
+
+
+
+#ggplot() +
+  #geom_line(data = daily_fluxes, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
+  #geom_line(data = daily_fluxes_test, aes(x = TIMESTAMP, y = fitted(mod_lm)))
+  #theme_classic()
+
+```
+
+
+
+# The role of k
+
+## 1. Hypotheses
+Hypothesis 1: R squared gets smaller as k approaches 1 and higher as k approaches N
+Hypothesis 2: MAE gets higher as k approaches 1 and lower as k approaches N
+These hypotheses can be explained using the bias-variance trade-off. A small k indicates that the model fits well to the training data, thus resulting in a low bias. This leads to a high variance, meaning the model struggles to explain other data than the training set. This latter fact equals a low R squared and high MAE.
+
+## 2. Testing the hypotheses
+I start off by removing all variables stored in the environment. Then, I read and tidy the data once again
+```{r}
+rm(list=ls())
+source(paste0(here::here(), "/R/eval_model.R"))
+daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
+  
+  # select only the variables we are interested in
+  dplyr::select(TIMESTAMP,
+                GPP_NT_VUT_REF,    # the target
+                ends_with("_QC"),  # quality control info
+                ends_with("_F"),   # includes all meteorological covariates
+                -contains("JSB")   # weird useless variable
+                ) |>
+
+  # convert to a nice date object
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+
+  # set all -9999 to NA
+  dplyr::na_if(-9999) |> # NOTE: Newer tidyverse version no longer support this statement
+                         # instead, use `mutate(across(where(is.numeric), ~na_if(., -9999))) |> `
+  
+  # retain only data based on >=80% good-quality measurements
+  # overwrite bad data with NA (not dropping rows)
+  dplyr::mutate(GPP_NT_VUT_REF = ifelse(NEE_VUT_REF_QC < 0.8, NA, GPP_NT_VUT_REF),
+                TA_F           = ifelse(TA_F_QC        < 0.8, NA, TA_F),
+                SW_IN_F        = ifelse(SW_IN_F_QC     < 0.8, NA, SW_IN_F),
+                LW_IN_F        = ifelse(LW_IN_F_QC     < 0.8, NA, LW_IN_F),
+                VPD_F          = ifelse(VPD_F_QC       < 0.8, NA, VPD_F),
+                PA_F           = ifelse(PA_F_QC        < 0.8, NA, PA_F),
+                P_F            = ifelse(P_F_QC         < 0.8, NA, P_F),
+                WS_F           = ifelse(WS_F_QC        < 0.8, NA, WS_F)) |> 
+
+  # drop QC variables (no longer needed)
+  dplyr::select(-ends_with("_QC"))
+```
+
+Now, I continue with further steps, as above
+```{r}
+set.seed(1982)  # for reproducibility
+split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
+daily_fluxes_train <- rsample::training(split)
+daily_fluxes_test <- rsample::testing(split)
+
+# Model and pre-processing formulation, use all variables but LW_IN_F
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = daily_fluxes_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+```
+
+I now fit and evaluate the KNN model, first with a small k and then with a large k
+```{r}
+# KNN model fitting and evaluation with small k:
+mod_knn_small_k <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 2),
+  metric = "RMSE"
+)
+eval_model(mod = mod_knn_small_k, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+
+# KNN model fitting and evaluation with large k:
+mod_knn_large_k <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 16),
+  metric = "RMSE"
+)
+eval_model(mod = mod_knn_large_k, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
+```
+
+First, the two plots speak in favor of Hypothesis 1: For a small k (approaching 1), R squared drops significantly from the training to the test set (here from 0.85 to 0.56). This is a substantial difference. For a large k (approaching N), R squared decreases only a bit from the training to the test set (here from 0.69 to 0.65). So the model generalizes much better (i.e. has a larger R squared on the test set) for large k than small k. I recall that in the light of the bias-variance trade off, large k means high bias and therefore small variance, and small variance equals good generalisability.  
+Second, the two plots also support Hypothesis 2: In the model with small k, MAE increases by a significant amount from the training to the test set (from 0.759 to 1.35). For a large k, MAE only increases a little (from 1.08 to 1.14). So on the test set, the MAE is much higher for the model with small k. This again supports the fact that small k implies a low bias, but a high variance and therefore not a good generalisability.
+
+
+I continue with building a function that takes k as an input and returns the MAE of the model on the test set
+```{r}
+k_MAE <- function(k) {
+  mod_knn <- caret::train(
+  pp, 
+  data = daily_fluxes_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = k),
+  metric = "RMSE"
+)
+  
+  daily_fluxes_test <- daily_fluxes_test |> 
+    drop_na()
+  daily_fluxes_test$fitted <- predict(mod_knn, newdata = daily_fluxes_test)
+  
+  metrics_test <- daily_fluxes_test |> 
+    yardstick::metrics(GPP_NT_VUT_REF, fitted)
+  
+  as.double(format(metrics_test |> 
+    filter(.metric == "mae") |> 
+    pull(.estimate), digits = 4))
+}
+
+k_MAE(19)
+```
+
+
+I finally visualize the previous findings. I do this by firstly computing MAE values for different levels of k (which is implemented by a loop iterating over the self made function k_MAE), and then visualizing these outcomes
+```{r}
+result_MAE <- c()
+k <- 1:100
+
+for (i in 1:1974) {
+  result_MAE[i] <- k_MAE(i)
+}
+
+ggplot() +
+  geom_point(aes(x = k, y = result_MAE)) +
+  theme_classic()
+```
+

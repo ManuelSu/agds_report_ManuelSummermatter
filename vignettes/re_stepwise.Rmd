@@ -1,0 +1,144 @@
+---
+title: "8.5 Report Exercise"
+author: "Manuel Summermatter"
+date: "2023-04-24"
+output: html_document
+---
+# Stepwise Forward Regression
+
+First, I set up the work space
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+Now, I load and explore the data
+```{r, message = FALSE, warning = FALSE}
+half_hourly_fluxes <- read_csv(paste0(here::here(), "/data/df_for_stepwise_regression.csv"))
+summary(half_hourly_fluxes)
+```
+
+# 1. Evaluation of all bivariate models (single predictor)
+```{r, message = FALSE, warning = FALSE}
+predictors <- half_hourly_fluxes |> 
+  subset(select = -c(GPP_NT_VUT_REF, siteid, TIMESTAMP))
+
+linmod_1 <- list()
+
+for (i in 1:length(predictors)) {
+  linmod_1[[i]] <- lm(GPP_NT_VUT_REF ~ ., half_hourly_fluxes[ ,c("GPP_NT_VUT_REF", colnames(predictors)[i])])
+}
+
+# Compute the AIC of the model with the highest R squared
+R_squared <- c()
+for (i in 1:length(predictors)){
+  R_squared[i] <- summary(linmod_1[[i]])$r.squared
+}
+
+best_model <- linmod_1[[which(R_squared == max(R_squared))]]
+
+AIC(best_model)
+
+# Visualisation
+half_hourly_fluxes |>
+  ggplot(aes(x = PPFD_IN, y = GPP_NT_VUT_REF)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = "lm", color = "red") +
+  labs(x = rownames(summary(best_model)$coefficients)[2], y = "GPP") +
+  theme_classic()
+```
+
+The evaluation of all bivariate linear regression models, so with one variable predicting GPP, yields that the variable PPFD_IN provides the best single-predictor model. This is the incoming photosynthetic photon flux density. Therefore, when considering only one explanatory variable, Gross Primary Production can be linearly predicted best with incoming photosynthetic photon flux density. An increase in incoming photosynthetic photon flux density of one unit leads to an increase in GPP of 0.01062.
+
+
+# 2. Stepwise forward regression
+First, I remove the stored values from the previous exercise which I don't need, so that only the half_hourly_fluxes and predictors data sets remain. Then, I initialize some variables and implement the stepwise forward regression in two for loops, which are nested into each other
+```{r, message = FALSE, warning = FALSE}
+rm(best_model, linmod_1, i, R_squared)
+
+var_selected <- c()
+var_fix <- c()
+AIC_current <- Inf
+AIC_last <- Inf
+current_best_model <- lm(1 ~ 1)
+
+for (i in 1:length(predictors)) {
+  linmods <- list()
+  r_squared <- c()
+  
+  AIC_last <- AIC_current
+  
+  best_model <- current_best_model
+ 
+  for (j in 1:length(predictors)) {
+    var_selected <- c(var_fix, noquote(colnames(predictors[1:j])))
+    linmods[[j]] <- lm(formula = as.formula(paste("GPP_NT_VUT_REF ~", paste(var_selected, collapse = "+"))), data = half_hourly_fluxes)
+    r_squared[j] <- summary(linmods[[j]])$r.squared
+  }
+  
+  current_best_model <- linmods[[which.max(r_squared)]]
+    
+  AIC_current <- AIC(best_model)
+    
+  var_fix <- c(var_fix, noquote(rownames(summary(current_best_model)$coefficients)[-1]))
+  
+  predictors[rownames(summary(current_best_model)$coefficients)[-1]] <- NULL
+  
+  if (AIC_current > AIC_last) {
+    break()
+  }
+}
+
+best_model
+
+formula(best_model)
+```
+
+The algorithm concludes with the best model, which has the following formula: GPP_NT_VUT_REF ~ TA_F + SW_IN_F + LW_IN_F + VPD_F + PA_F + P_F + WS_F.  
+The combination of these 7 variables yields the best linear model to predict GPP. The variables are the following:  
+- TA_F = Air temperature  
+- SW_IN_F = Shortwave radiation, incoming  
+- LW_IN_F = Longwave radiation, incoming  
+- VPD_F = Vapor pressure deficit  
+- PA_F = Atmospheric pressure  
+- P_F = Precipitation  
+- WS_F = Wind speed  
+
+The following variables haven't been selected:
+```{r, message = FALSE, warning = FALSE}
+colnames(predictors)
+```
+
+These are:  
+- LW_IN_F_MDS = Longwave radiation, incoming, gapfilled using MDS (multidimensional scaling)  
+- VPD_F_MDS = Vapor pressure deficit, gapfilled using MDS  
+- CO2_F_MDS = CO2 mole fraction, gapfilled with MDS  
+- PPFD_IN = Photosynthetic photon flux density, incoming  
+- USTAR = Friction velocity  
+
+One can observe that LW_IN_F_MDS and VPD_F_MDS are just slightly modified variables to the selected ones, LW_IN_F and VPD_F. It is therefore assumable that there is a large correlation of these two variable couples, and therefore, adding the other ones would not significantly help in explaining more of the variance of GPP. That's why they haven't got selected into the best model. Furthermore, it seems that CO2 mole fraction, photosynthetic photon flux density and friction velocity don't add enough to the explanation of the variance in Gross Primary Production
+
+To demonstrate this, I extend the best model with LW_IN_F_MDS
+```{r, message = FALSE, warning = FALSE}
+summary(best_model)
+
+best_model_extended <- lm(formula = as.formula(paste("GPP_NT_VUT_REF ~", paste(c(rownames(summary(best_model)$coefficients)[-1], "LW_IN_F_MDS"), collapse = "+"))), data = half_hourly_fluxes)
+
+summary(best_model_extended)
+```
+
+It shows that the best model has a larger R squared than the best model extended with the extra variable. Also, the first one has a smaller residual standard error. And lastly, the coefficient for LW_IN_F_MDS is not significantly different from zero. These observations show that extending the model with the used variable (LW_IN_F_MDS) would decrease the model's accuracy in predicting GPP, so it's better to leave this variable out of the model. The same applies for all the variables which haven't been selected by the stepwise forward regression algorithm.
+
+Lastly, I plot the fitted values of the best model against the actual values of GPP. This shows the accuraccy of the best model in a graphical way
+```{r, message = FALSE, warning = FALSE}
+half_hourly_fluxes <- half_hourly_fluxes |>
+  mutate(fitted = predict(best_model, half_hourly_fluxes))
+half_hourly_fluxes |>
+  ggplot(aes(GPP_NT_VUT_REF, fitted)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Fitted values of GPP") +
+  theme_classic()
+```
+
+One can see that the points lay pretty well around the red linear regression line. This illustrates again that the best model does a good job in explaining the variation of GPP.

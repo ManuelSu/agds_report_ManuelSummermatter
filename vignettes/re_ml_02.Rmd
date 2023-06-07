@@ -1,0 +1,141 @@
+---
+title: "10.4 Report Exercise"
+author: "Manuel Summermatter"
+date: "2023-05-22"
+output: html_document
+---
+
+First, I set up the work space
+```{r}
+library(tidyverse)
+library(lubridate)
+library(caret)
+library(recipes)
+source(paste0(here::here(), "/R/eval_model.R"))
+```
+
+Now, I load and prepare the data
+```{r}
+fluxes_Davos <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
+  dplyr::select(TIMESTAMP,
+                GPP_NT_VUT_REF,
+                ends_with("_QC"),
+                ends_with("_F"),
+                -contains("JSB")
+                ) |>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  dplyr::mutate(across(where(is.numeric), ~na_if(., -9999))) |>
+  dplyr::mutate(GPP_NT_VUT_REF = ifelse(NEE_VUT_REF_QC < 0.8, NA, GPP_NT_VUT_REF),
+                TA_F           = ifelse(TA_F_QC        < 0.8, NA, TA_F),
+                SW_IN_F        = ifelse(SW_IN_F_QC     < 0.8, NA, SW_IN_F),
+                LW_IN_F        = ifelse(LW_IN_F_QC     < 0.8, NA, LW_IN_F),
+                VPD_F          = ifelse(VPD_F_QC       < 0.8, NA, VPD_F),
+                PA_F           = ifelse(PA_F_QC        < 0.8, NA, PA_F),
+                P_F            = ifelse(P_F_QC         < 0.8, NA, P_F),
+                WS_F           = ifelse(WS_F_QC        < 0.8, NA, WS_F)) |>
+  dplyr::select(-ends_with("_QC"))
+
+
+fluxes_Laegern <- read_csv(paste0(here::here(), "/data/FLX_CH-Lae_FLUXNET2015_FULLSET_DD_2004-2014_1-4.csv")) |>  
+  dplyr::select(TIMESTAMP,
+                GPP_NT_VUT_REF,
+                ends_with("_QC"),
+                ends_with("_F"),
+                -contains("JSB"),
+                -P_F
+                ) |>
+  dplyr::mutate(TIMESTAMP = ymd(TIMESTAMP)) |>
+  dplyr::mutate(across(where(is.numeric), ~na_if(., -9999))) |>
+  dplyr::mutate(GPP_NT_VUT_REF = ifelse(NEE_VUT_REF_QC < 0.8, NA, GPP_NT_VUT_REF),
+                TA_F           = ifelse(TA_F_QC        < 0.8, NA, TA_F),
+                SW_IN_F        = ifelse(SW_IN_F_QC     < 0.8, NA, SW_IN_F),
+                LW_IN_F        = ifelse(LW_IN_F_QC     < 0.8, NA, LW_IN_F),
+                VPD_F          = ifelse(VPD_F_QC       < 0.8, NA, VPD_F),
+                PA_F           = ifelse(PA_F_QC        < 0.8, NA, PA_F),
+                WS_F           = ifelse(WS_F_QC        < 0.8, NA, WS_F)) |>
+  dplyr::select(-ends_with("_QC"))
+```
+
+Now, I get an overview of the data
+```{r}
+gridExtra::grid.arrange(
+  fluxes_Davos |> 
+    ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
+    geom_histogram() +
+    labs(title = "Davos"),
+  fluxes_Laegern |> 
+    ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
+    geom_histogram() +
+    labs(title = "Laegern")
+)
+```
+
+What follows are further steps
+```{r}
+# Data splitting Davos
+set.seed(1982)
+split_Davos <- rsample::initial_split(fluxes_Davos, prop = 0.8, strata = "VPD_F")
+fluxes_Davos_train <- rsample::training(split_Davos)
+fluxes_Davos_test <- rsample::testing(split_Davos)
+
+# Data splitting Laegern
+set.seed(1982)
+split_Laegern <- rsample::initial_split(fluxes_Laegern, prop = 0.8, strata = "VPD_F")
+fluxes_Laegern_train <- rsample::training(split_Laegern)
+fluxes_Laegern_test <- rsample::testing(split_Laegern)
+
+
+# Model and pre-processing formulation Davos, use all variables but LW_IN_F
+pp_Davos <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = fluxes_Davos_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+# Model and pre-processing formulation Laegern, use all variables but LW_IN_F
+pp_Laegern <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = fluxes_Laegern_train |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+
+# KNN model for Davos
+mod_knn_Davos <- caret::train(
+  pp_Davos, 
+  data = fluxes_Davos_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+
+# KNN model for Laegern
+mod_knn_Laegern <- caret::train(
+  pp_Laegern, 
+  data = fluxes_Laegern_train |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+
+# P_F variable in fluxes_Laegern_train has NA in every row, so after the drop_na() it drops every row and the dataframe is empty -> Then obviously the model can't work with this empty dataframe
+```
+
+Now, I call the model evaluation function for the KNN model for Davos and Laegern, each tested within-site and across-site
+```{r}
+# KNN prediction for Davos, within-site
+eval_model(mod = mod_knn_Davos, df_train = fluxes_Davos_train, df_test = fluxes_Davos_test)
+
+# KNN prediction for Laegern, within-site
+eval_model(mod = mod_knn_Laegern, df_train = fluxes_Laegern_train, df_test = fluxes_Laegern_test)
+
+
+# KNN prediction for Davos, across-site
+eval_model(mod = mod_knn_Davos, df_train = fluxes_Laegern_train, df_test = fluxes_Davos_test)
+
+# KNN prediction for Laegern, across-site
+eval_model(mod = mod_knn_Laegern, df_train = fluxes_Davos_train, df_test = fluxes_Laegern_test)
+```
+

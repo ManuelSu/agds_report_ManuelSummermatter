@@ -1,0 +1,105 @@
+---
+title: "4.4 Report Exercise"
+author: "Manuel Summermatter"
+date: "2023-03-20"
+output: html_document
+---
+# Telling a story from data
+
+First, I set up the work space and load the data. I then also clean it so that the time information is in a concise way. The data contains air quality measurements in New York, obtained from May to September 1973.
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(lubridate)
+airquality <- datasets::airquality
+
+airquality <- airquality |>
+  mutate(date = as_date(paste("1973", Month, Day, sep = "-")), Month = NULL, Day = NULL)
+head(airquality)
+```
+The data now consists of 5 variables with 153 observations. The variables are Ozone (measured in part per billion), Solar radiation (measured in Langleys), Wind speed (in miles per hour), Temperature (maximum daily temperature measured in degrees Fahrenheit) and date (measuring year, month and day of the observation).
+
+## Temporal pattern of wind speed
+What follows is a visual presentation of the temporal pattern of the wind speed.
+```{r, message = FALSE, warning = FALSE}
+airquality |>
+  ggplot(
+    aes(x = date, y = Wind)
+  ) +
+  geom_line(colour = "red") +
+  labs(title = "Temporal pattern of wind speed in mph", x = "Time", y = "Wind (mph)") +
+  theme_classic()
+```
+
+This visualization shows that the average of the wind speed (subtracting the fluctuations) declines mid-June and stays lower until mid-September, when it starts to increase again.
+
+## Correlation between wind speed and temperature
+I will now present a scatter plot of wind speed and temperature, outlining any significant correlation between these two variables.
+```{r, message = FALSE, warning = FALSE}
+airquality |>
+  ggplot(
+    aes(x = Wind, y = Temp)
+  ) +
+  geom_point() +
+  geom_smooth(method = "lm", colour = "red") +
+  labs(title = "Correlation between wind speed and temperature", x = "Wind (mph)", y = "Temperature (°F)")
+```
+
+The red line represents the linear regression line. Its negative slope shows that there is a negative correlation between wind speed and temperature. This means that, in tendency, if wind speed is large, temperature is low and vice versa.
+
+## Outliers in Ozone
+The last figure shows any outliers in Ozone. These are observations that lie outside the interquartile range of the respective variable.
+```{r, message = FALSE, warning = FALSE}
+outliers <- boxplot.stats(airquality$Ozone)$out
+
+airquality_plot <- airquality |>
+  mutate(outlier = Ozone %in% outliers)
+
+airquality_plot |>
+  ggplot(
+    aes(x = Solar.R, y = Ozone, colour = outlier)
+  ) +
+  geom_point() +
+  scale_colour_manual("Outlier?", values = c("black", "red"), labels = c("No", "Yes")) +
+  labs(title = "Correlation between solar radiation and ozone", x = "Solar Radiation (Langleys)", y = "Ozone (parts per billion)")
+```
+
+The graphic shows that, for the Ozone variable, there are only 2 observations that count as outliers, in the sense that they are outside the interquartile range.
+
+
+## Statistical description
+First, I remove any previously generated data values and reset the data set to its initial structure
+```{r, message = FALSE, warning = FALSE}
+rm(list=ls())
+airquality <- datasets::airquality
+```
+
+I start this statistical description part by calculating a description of the mean temperature per month. This is important as it shows the trend in temperatures over the course of a longer time period (In the data set, there are unfortunately only 5 months)
+```{r, message = FALSE, warning = FALSE}
+knitr::kable(airquality |>
+  group_by(Month) |>
+  summarise(MeanTemp = mean(Temp))
+)
+```
+It can be seen that the mean temperature is the highest in July and August, which is not surprising when thinking of New York's climograph. From the months available, May has the lowest mean temperatures.
+
+
+Second, I analyse the correlation between wind speed and temperature. This is interesting as one's intuition out of personal experience probably speaks in favor of such a correlation. I do this by calculating the correlation coefficient.
+```{r, message = FALSE, warning = FALSE}
+cor(airquality$Wind, airquality$Temp)
+airquality |>
+  ggplot(
+    aes(x = Wind, y = Temp)
+      ) +
+      geom_point() +
+      geom_smooth(method = "lm") +
+  labs(title = "Correlation between wind speed and temperature", x = "Wind (mph)", y = "Temperature (°F)")
+```
+
+The correlation coefficient is -0.4579879, so there is a negative correlation between wind speed and temperature over the course of the time period of the data set (May to September). This fact can also be seen in the scatter plot through the negative slope of the regression line.
+
+Third, I will analyze if, and to what extend, the variance of Ozone can be explained by Solar radiation. I therefore build a linear regression model in the form of Ozone ~ Solar radiation.
+```{r, message = FALSE, warning = FALSE}
+model <- lm(Ozone ~ Solar.R, data = airquality)
+summary(model)
+```
+The coefficient of Solar radiation is 0.12717. This means that if Solar radiation increased by 1 Langley, Ozone increases by 0.12717 parts per billion. This effect is statistically significant on the 1% level, as the respective p value is 0.000179 which is smaller than 0.01 

@@ -1,0 +1,62 @@
+---
+title: "3.5 Report Exercise"
+author: "Manuel Summermatter"
+date: "2023-03-11"
+output: html_document
+---
+# Cleaning data from elevated CO2 experiments
+
+## 2.
+First, I set up the work space and load the data which I have manually cleaned in excel
+```{r, message = FALSE, warning = FALSE}
+library(tidyverse)
+elevated_co2_experiments <- read_delim("C:/Manuel Summermatter/Bachelorstudium/6. Semester/Applied Geodata Science I/agds_report_ManuelSummermatter/data/Elevated_CO2_Experiments.csv", col_types = "cccc?iiiicc", skip = 3)
+head(elevated_co2_experiments)
+```
+
+Now, I add a new column to the dataframe: The log-response ratio (RR)
+```{r}
+elevated_co2_experiments <-  elevated_co2_experiments |>
+  mutate(RR = log(SOC_elevated / SOC_ambient))
+head(elevated_co2_experiments)
+```
+
+Lastly, I aggregate the data per experiment and calculate the log-response ratio within each experiment
+```{r}  
+RR_within_each_experiment <- elevated_co2_experiments|>
+  group_by(Experiment) |>
+  summarise(RR = mean(RR))
+knitr::kable(RR_within_each_experiment)
+```
+
+## 3.
+I start the third part of this exercise with work space cleaning, removing the most recently created dataframe "RR_within_each_experiment"
+```{r}
+rm(RR_within_each_experiment)
+```
+
+Now, I divide the dataframe into 3 different ones, distinguished by their respective year since the start of the experiment: The early, mid- and late phase. Lastly, I put these dataframes back together, so that it results in one table again
+```{r}
+early_phase <- elevated_co2_experiments |>
+  filter(Time_years < 3) |>
+  mutate(phase = "early")
+
+mid_phase <- elevated_co2_experiments |>
+  filter(Time_years >= 3 & Time_years <= 6) |>
+  mutate(phase = "mid")
+
+late_phase <- elevated_co2_experiments |>
+  filter(Time_years > 6) |>
+  mutate(phase = "late")
+
+end_table <- bind_rows(early_phase, mid_phase, late_phase)
+head(end_table)
+```
+
+Now, I create a table which represents the log-response ratio for each of the three phases
+```{r}
+result_table <- end_table |>
+  group_by(phase) |>
+  summarise(RR = mean(RR, na.rm = TRUE))
+knitr::kable(result_table)
+```
