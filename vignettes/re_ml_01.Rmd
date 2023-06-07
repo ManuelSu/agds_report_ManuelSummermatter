@@ -16,7 +16,7 @@ source(paste0(here::here(), "/R/eval_model.R"))
 # Comparison of the linear regression and KNN models
 
 Now, I load and prepare the data (adopted from the chapter)
-```{r}
+```{r, message = FALSE, warning = FALSE}
 daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
   
   # select only the variables we are interested in
@@ -109,71 +109,32 @@ On a spectrum of the bias-variance trade-off, the linear regression model has a 
 
 ## 3. Visualising temporal variations of observed and modelled GPP
 ```{r}
+daily_fluxes_train <- daily_fluxes_train |> 
+    drop_na()
+  daily_fluxes_train$fitted_lm <- predict(mod_lm, newdata = daily_fluxes_train)
+  
+daily_fluxes_test <- daily_fluxes_test |> 
+    drop_na()
+  daily_fluxes_test$fitted_lm <- predict(mod_lm, newdata = daily_fluxes_test)
+  
+daily_fluxes_train <- daily_fluxes_train |> 
+    drop_na()
+  daily_fluxes_train$fitted_knn <- predict(mod_knn, newdata = daily_fluxes_train)
+  
+daily_fluxes_test <- daily_fluxes_test |> 
+    drop_na()
+  daily_fluxes_test$fitted_knn <- predict(mod_knn, newdata = daily_fluxes_test)
 
-# daily_fluxes_train$fitted_lm <- predict(mod_lm, newdata = daily_fluxes_train)
+ggplot(data = daily_fluxes_train, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
+  geom_line(aes(color = "Observed GPP")) +
+  geom_line(data = daily_fluxes_train, aes(y = fitted_lm, color = "lm on training set")) +
+  geom_line(data = daily_fluxes_train, aes(y = fitted_knn, color = "knn on training set")) +
+  geom_line(data = daily_fluxes_test, aes(y = fitted_lm, color = "lm on test set")) +
+  geom_line(data = daily_fluxes_test, aes(y = fitted_knn, color = "knn on test set")) +
+  labs(title = "Temporal variations of observed and modelled GPP", x = "Time", y = "GPP") +
+  scale_color_manual(values = c("Observed GPP" = "black", "lm on training set" = "red", "knn on training set" = "green", "lm on test set" = "blue","knn on test set" = "orange")) +
+  theme_classic()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-pp_plot <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
-                      data = daily_fluxes_train) |> 
-  recipes::step_BoxCox(all_predictors()) |> 
-  recipes::step_center(all_numeric(), -all_outcomes()) |>
-  recipes::step_scale(all_numeric(), -all_outcomes())
-
-# Fit linear regression model
-mod_lm_plot <- caret::train(
-  pp_plot, 
-  data = daily_fluxes_train |> drop_na(), 
-  method = "lm",
-  trControl = caret::trainControl(method = "none"),
-  metric = "RMSE"
-)
-
-# Fit KNN model
-mod_knn_plot <- caret::train(
-  pp_plot, 
-  data = daily_fluxes_train |> drop_na(), 
-  method = "knn",
-  trControl = caret::trainControl(method = "none"),
-  tuneGrid = data.frame(k = 8),
-  metric = "RMSE"
-)
-
-#daily_fluxes |>
- # ggplot(aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
-  #geom_line(aes(color = "black")) +
- # geom_line(aes(x = TIMESTAMP, y = predict(mod_lm_plot, daily_fluxes_test), color = "red")) +
-  #geom_line(aes(x = TIMESTAMP, y = predict(mod_knn_plot, daily_fluxes_test), color = "green")) +
- # labs(x = "Time", y = "GPP") +
-  #scale_color_manual()
-
-
-
-
-#ggplot() +
-  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF), color = "black") +
-  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = predict(mod_lm_plot, daily_fluxes_train)), color = "red") +
-  #geom_line(data = daily_fluxes_train, aes(x = TIMESTAMP, y = predict(mod_knn_plot, daily_fluxes_train)), color = "green") +
-  #labs(x = "Time", y = "GPP") +
-  #scale_color_manual()
-
-
-
-#ggplot() +
-  #geom_line(data = daily_fluxes, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
-  #geom_line(data = daily_fluxes_test, aes(x = TIMESTAMP, y = fitted(mod_lm)))
-  #theme_classic()
 
 ```
 
@@ -298,7 +259,7 @@ k_MAE(19)
 I finally visualize the previous findings. I do this by firstly computing MAE values for different levels of k (which is implemented by a loop iterating over the self made function k_MAE), and then visualizing these outcomes
 ```{r}
 result_MAE <- c()
-k <- 1:100
+k <- 1:499
 
 for (i in 1:1974) {
   result_MAE[i] <- k_MAE(i)
@@ -309,3 +270,11 @@ ggplot() +
   theme_classic()
 ```
 
+In this plot, the x axis, so the number of k, can be viewed as the model complexity. The y axis, the values of the MAE, can be viewed as the model generalisability. One can obtain from the plot, that there exists a level of k, for which this trade off is balanced optimally. The area of small values of k is a region where overfitting occurs, whereas there occurs underfitting in the region of high values of k.
+
+Lastly, I want to find the optimal k in terms of model generalisability.
+```{r}
+df <- data.frame("k" = k, "MAE" = result_MAE)
+df |>
+  filter(MAE == min(MAE))
+```

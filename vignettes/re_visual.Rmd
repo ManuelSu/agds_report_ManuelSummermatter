@@ -41,7 +41,8 @@ airquality |>
   ) +
   geom_point() +
   geom_smooth(method = "lm", colour = "red") +
-  labs(title = "Correlation between wind speed and temperature", x = "Wind (mph)", y = "Temperature (°F)")
+  labs(title = "Correlation between wind speed and temperature", x = "Wind (mph)", y = "Temperature (°F)") +
+  theme_classic()
 ```
 
 The red line represents the linear regression line. Its negative slope shows that there is a negative correlation between wind speed and temperature. This means that, in tendency, if wind speed is large, temperature is low and vice versa.
@@ -60,7 +61,8 @@ airquality_plot |>
   ) +
   geom_point() +
   scale_colour_manual("Outlier?", values = c("black", "red"), labels = c("No", "Yes")) +
-  labs(title = "Correlation between solar radiation and ozone", x = "Solar Radiation (Langleys)", y = "Ozone (parts per billion)")
+  labs(title = "Correlation between solar radiation and ozone", x = "Solar Radiation (Langleys)", y = "Ozone (parts per billion)") +
+  theme_classic()
 ```
 
 The graphic shows that, for the Ozone variable, there are only 2 observations that count as outliers, in the sense that they are outside the interquartile range.

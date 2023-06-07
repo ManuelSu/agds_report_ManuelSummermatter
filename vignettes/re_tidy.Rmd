@@ -37,26 +37,21 @@ rm(RR_within_each_experiment)
 
 Now, I divide the dataframe into 3 different ones, distinguished by their respective year since the start of the experiment: The early, mid- and late phase. Lastly, I put these dataframes back together, so that it results in one table again
 ```{r}
-early_phase <- elevated_co2_experiments |>
-  filter(Time_years < 3) |>
-  mutate(phase = "early")
+elevated_co2_experiments <- elevated_co2_experiments |>
+  mutate(phase = ifelse (Time_years < 3, "early", NA),
+         phase = ifelse (Time_years >= 3 & Time_years <= 6, "mid", phase),
+         phase = ifelse (Time_years > 6, "late", phase))
 
-mid_phase <- elevated_co2_experiments |>
-  filter(Time_years >= 3 & Time_years <= 6) |>
-  mutate(phase = "mid")
+head(elevated_co2_experiments)
 
-late_phase <- elevated_co2_experiments |>
-  filter(Time_years > 6) |>
-  mutate(phase = "late")
-
-end_table <- bind_rows(early_phase, mid_phase, late_phase)
-head(end_table)
+elevated_co2_experiments |>
+  filter(phase == "early")
 ```
 
 Now, I create a table which represents the log-response ratio for each of the three phases
 ```{r}
-result_table <- end_table |>
+result_table <- elevated_co2_experiments |>
   group_by(phase) |>
   summarise(RR = mean(RR, na.rm = TRUE))
-knitr::kable(result_table)
+knitr::kable(result_table, caption = "Log-response ratio per phase")
 ```
