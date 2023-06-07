@@ -129,14 +129,22 @@ Now, I call the model evaluation function for the KNN model for Davos and Laeger
 # KNN prediction for Davos, within-site
 eval_model_chapter_10(mod = mod_knn_Davos, df_train = fluxes_Davos_train, df_test = fluxes_Davos_test)
 
+# KNN prediction for Davos, across-site
+eval_model_chapter_10(mod = mod_knn_Davos, df_train = fluxes_Davos_train, df_test = fluxes_Laegern_test)
+
 # KNN prediction for Laegern, within-site
 eval_model_chapter_10(mod = mod_knn_Laegern, df_train = fluxes_Laegern_train, df_test = fluxes_Laegern_test)
 
-
-# KNN prediction for Davos, across-site
-eval_model_chapter_10(mod = mod_knn_Davos, df_train = fluxes_Laegern_train, df_test = fluxes_Davos_test)
-
 # KNN prediction for Laegern, across-site
-eval_model_chapter_10(mod = mod_knn_Laegern, df_train = fluxes_Davos_train, df_test = fluxes_Laegern_test)
+eval_model_chapter_10(mod = mod_knn_Laegern, df_train = fluxes_Laegern_train, df_test = fluxes_Davos_test)
 ```
 
+The KNN model which is trained on the Davos site performs better when predicted on the within-site test set than on the across-site test set:  
+- R squared is 0.64 within-site and 0.48 across-site  
+- RMSE is 1.56 within-site and 3.52 across-site  
+- MAE is within-site 1.17 and 2.78 across-site  
+
+For the knn model which is trained on the Laegern site, the results point to the same findings. The model performs better on the within-site prediction than on the across-site prediction:  
+- R squared is 0.66 within-site and 0.49 across-site  
+- RMSE is 2.52 within-site and 2.64 across-site  
+- MAE is within-site 1.91 and 2.08 across-site
