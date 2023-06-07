@@ -4,6 +4,12 @@ author: "Manuel Summermatter"
 date: "2023-05-15"
 output: html_document
 ---
+# Comparison of the linear regression and KNN models
+## Introduction
+In the first part of this exercise, I analyse linear regression and KNN models and discuss implications of it for different model evaluation metrics. The whole exercise puts a focus on the bias-variance trade off, a very important topic in supervised machine learning.
+
+
+## Methods and Results
 First, I set up the work space
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
@@ -12,8 +18,6 @@ library(caret)
 library(recipes)
 source(paste0(here::here(), "/R/eval_model.R"))
 ```
-
-# Comparison of the linear regression and KNN models
 
 Now, I load and prepare the data (adopted from the chapter)
 ```{r, message = FALSE, warning = FALSE}
@@ -50,14 +54,15 @@ daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULL
 ```
 
 Now, I get an overview of the data
-```{r}
+```{r, message = FALSE, warning = FALSE}
 daily_fluxes |> 
   ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
-  geom_histogram()
+  geom_histogram() +
+  theme_classic()
 ```
 
 What follows are further steps
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Data splitting
 set.seed(1982)  # for reproducibility
 split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
@@ -91,8 +96,8 @@ mod_knn <- caret::train(
 )
 ```
 
-Now, I call the model evaluation function which I loaded into the work space in the beginning
-```{r}
+Now, I call the model evaluation function, which I loaded into the work space in the beginning, for the linear regression and for the KNN model
+```{r, message = FALSE, warning = FALSE}
 # Linear regression model
 eval_model(mod = mod_lm, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
 
@@ -100,15 +105,16 @@ eval_model(mod = mod_lm, df_train = daily_fluxes_train, df_test = daily_fluxes_t
 eval_model(mod = mod_knn, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
 ```
 
-## 2. Interpretation of observed differences
+
+## Discussion
 The observation that the difference between the evaluation on the training and the test set is larger for the KNN model than for the linear regression model means that the variance of the KNN model is larger than the variance of the linear model. In the light of the bias-variance trade-off, this in turn means that the bias of the KNN model is smaller than of the linear model. This makes sense as the KNN model is more precise than the linear model, which leads to a smaller bias.  
 
 The KNN model suits better in explaining the underlying relationship in the data. This can be seen when observing the R squared values. The KNN model has, for both the training and the test set, larger values of R squared than the linear regression model. This leads to the fact that the KNN model has a better performance on the test set. The higher variance of the KNN model, so the bigger difference from training to test set, cannot change this circumstance, but it makes things less clear on the test set compared to the training set.  
 
 On a spectrum of the bias-variance trade-off, the linear regression model has a high bias and a low variance, and the KNN model has a low bias and a high variance.
 
-## 3. Visualising temporal variations of observed and modelled GPP
-```{r}
+I now visualize temporal variations of observed and modelled GPP for both models
+```{r, message = FALSE, warning = FALSE}
 daily_fluxes_train <- daily_fluxes_train |> 
     drop_na()
   daily_fluxes_train$fitted_lm <- predict(mod_lm, newdata = daily_fluxes_train)
@@ -134,22 +140,26 @@ ggplot(data = daily_fluxes_train, aes(x = TIMESTAMP, y = GPP_NT_VUT_REF)) +
   labs(title = "Temporal variations of observed and modelled GPP", x = "Time", y = "GPP") +
   scale_color_manual(values = c("Observed GPP" = "black", "lm on training set" = "red", "knn on training set" = "green", "lm on test set" = "blue","knn on test set" = "orange")) +
   theme_classic()
-
-
 ```
+
+The visualization shows that all the different time series move very similarly. So, the different predictions of the linear regression as well as the KNN model don't differ much from the observed values of GPP.
 
 
 
 # The role of k
+## Introduction
+In the second part of this exercise, I look at the KNN model in detail and I will examine, which role the hyperparamater k has for the performance of the model.
 
-## 1. Hypotheses
-Hypothesis 1: R squared gets smaller as k approaches 1 and higher as k approaches N
-Hypothesis 2: MAE gets higher as k approaches 1 and lower as k approaches N
+
+## Methods and Results
+I start this part by formulating two hypotheses. They are solely based on my a priori knowledge.  
+- Hypothesis 1: R squared gets smaller as k approaches 1 and higher as k approaches N  
+- Hypothesis 2: MAE gets higher as k approaches 1 and lower as k approaches N  
 These hypotheses can be explained using the bias-variance trade-off. A small k indicates that the model fits well to the training data, thus resulting in a low bias. This leads to a high variance, meaning the model struggles to explain other data than the training set. This latter fact equals a low R squared and high MAE.
 
-## 2. Testing the hypotheses
+Now, I will put these hypotheses to the test.  
 I start off by removing all variables stored in the environment. Then, I read and tidy the data once again
-```{r}
+```{r, message = FALSE, warning = FALSE}
 rm(list=ls())
 source(paste0(here::here(), "/R/eval_model.R"))
 daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
@@ -185,7 +195,7 @@ daily_fluxes <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULL
 ```
 
 Now, I continue with further steps, as above
-```{r}
+```{r, message = FALSE, warning = FALSE}
 set.seed(1982)  # for reproducibility
 split <- rsample::initial_split(daily_fluxes, prop = 0.7, strata = "VPD_F")
 daily_fluxes_train <- rsample::training(split)
@@ -200,7 +210,7 @@ pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F,
 ```
 
 I now fit and evaluate the KNN model, first with a small k and then with a large k
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # KNN model fitting and evaluation with small k:
 mod_knn_small_k <- caret::train(
   pp, 
@@ -224,12 +234,13 @@ mod_knn_large_k <- caret::train(
 eval_model(mod = mod_knn_large_k, df_train = daily_fluxes_train, df_test = daily_fluxes_test)
 ```
 
+
+## Discussion
 First, the two plots speak in favor of Hypothesis 1: For a small k (approaching 1), R squared drops significantly from the training to the test set (here from 0.85 to 0.56). This is a substantial difference. For a large k (approaching N), R squared decreases only a bit from the training to the test set (here from 0.69 to 0.65). So the model generalizes much better (i.e. has a larger R squared on the test set) for large k than small k. I recall that in the light of the bias-variance trade off, large k means high bias and therefore small variance, and small variance equals good generalisability.  
 Second, the two plots also support Hypothesis 2: In the model with small k, MAE increases by a significant amount from the training to the test set (from 0.759 to 1.35). For a large k, MAE only increases a little (from 1.08 to 1.14). So on the test set, the MAE is much higher for the model with small k. This again supports the fact that small k implies a low bias, but a high variance and therefore not a good generalisability.
 
-
 I continue with building a function that takes k as an input and returns the MAE of the model on the test set
-```{r}
+```{r, message = FALSE, warning = FALSE}
 k_MAE <- function(k) {
   mod_knn <- caret::train(
   pp, 
@@ -255,26 +266,29 @@ k_MAE <- function(k) {
 k_MAE(19)
 ```
 
-
-I finally visualize the previous findings. I do this by firstly computing MAE values for different levels of k (which is implemented by a loop iterating over the self made function k_MAE), and then visualizing these outcomes
-```{r}
+I finally visualize the previous findings. I do this by firstly computing MAE values for different levels of k (which is implemented by a loop iterating over the self made function k_MAE, and then visualizing these outcomes (note: The loop takes a long time to finish)
+```{r, message = FALSE, warning = FALSE}
 result_MAE <- c()
 k <- 1:499
 
-for (i in 1:1974) {
+for (i in 1:499) {
   result_MAE[i] <- k_MAE(i)
 }
 
 ggplot() +
   geom_point(aes(x = k, y = result_MAE)) +
+  labs(title = "MAE as a function of k", x = "k", y = "MAE") +
   theme_classic()
 ```
 
 In this plot, the x axis, so the number of k, can be viewed as the model complexity. The y axis, the values of the MAE, can be viewed as the model generalisability. One can obtain from the plot, that there exists a level of k, for which this trade off is balanced optimally. The area of small values of k is a region where overfitting occurs, whereas there occurs underfitting in the region of high values of k.
 
 Lastly, I want to find the optimal k in terms of model generalisability.
-```{r}
+```{r, message = FALSE, warning = FALSE}
 df <- data.frame("k" = k, "MAE" = result_MAE)
-df |>
+knitr::kable(df |>
   filter(MAE == min(MAE))
+,caption = "Minimal MAE and its respective k")
 ```
+
+It can be obtained that there are two values of k for which the MAE is minimal: k = 19 and k = 33. These values of k serve as the optimal values in terms of model generalisability

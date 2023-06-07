@@ -359,51 +359,31 @@ display: none;
 
 <div id="cleaning-data-from-elevated-co2-experiments" class="section level1">
 <h1>Cleaning data from elevated CO2 experiments</h1>
-<div id="section" class="section level2">
-<h2>2.</h2>
+<div id="introduction" class="section level2">
+<h2>Introduction</h2>
+<p>The goal of this exercise is to clean and aggregate data from
+elevated CO2 experiments. The data set is taken from the paper of Van
+Groenigen et al. (2014), “Faster Decomposition Under Increased
+Atmospheric CO2 Limits Soil Carbon Storage”</p>
+</div>
+<div id="methods-and-results" class="section level2">
+<h2>Methods and Results</h2>
 <p>First, I set up the work space and load the data which I have
 manually cleaned in excel</p>
 <pre class="r"><code>library(tidyverse)
-elevated_co2_experiments &lt;- read_delim(&quot;C:/Manuel Summermatter/Bachelorstudium/6. Semester/Applied Geodata Science I/agds_report_ManuelSummermatter/data/Elevated_CO2_Experiments.csv&quot;, col_types = &quot;cccc?iiiicc&quot;, skip = 3)
-head(elevated_co2_experiments)</code></pre>
-<pre><code>## # A tibble: 6 × 11
-##   Experi…¹ Citat…² Depth Sampl…³ Time_…⁴ SOC_a…⁵ SOC_e…⁶ n (am…⁷ n (in…⁸ Descr…⁹
-##   &lt;chr&gt;    &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt;     &lt;dbl&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt; &lt;chr&gt;  
-## 1 Arizona… Leavit… 0-15… Nov 95      0      1344    1228       4       4 fig. 3 
-## 2 Arizona… Leavit… 0-15… may 19…     0.5    1363    1305       4       4 fig. 3 
-## 3 Arizona… Leavit… 0-15… dec. 1…     1      1254    1264       4       4 fig. 3 
-## 4 Arizona… Leavit… 0-15… may 19…     1.5    1258    1400       4       4 fig. 3 
-## 5 Biosphe… Truema… 0-25… averag…     0      5950    6362       1       1 fig. 3 
-## 6 Biosphe… Truema… 0-25… averag…     1      5254    4735       1       1 fig. 3 
-## # … with 1 more variable: `Value treatment` &lt;chr&gt;, and abbreviated variable
-## #   names ¹​Experiment, ²​Citation, ³​`Sample date`, ⁴​Time_years, ⁵​SOC_ambient,
-## #   ⁶​SOC_elevated, ⁷​`n (ambient CO2)`, ⁸​`n (increased CO2)`,
-## #   ⁹​`Description of data source`</code></pre>
+elevated_co2_experiments &lt;- read_delim(&quot;C:/Manuel Summermatter/Bachelorstudium/6. Semester/Applied Geodata Science I/agds_report_ManuelSummermatter/data/Elevated_CO2_Experiments.csv&quot;, col_types = &quot;cccc?iiiicc&quot;, skip = 3)</code></pre>
 <p>Now, I add a new column to the dataframe: The log-response ratio
 (RR)</p>
 <pre class="r"><code>elevated_co2_experiments &lt;-  elevated_co2_experiments |&gt;
-  mutate(RR = log(SOC_elevated / SOC_ambient))
-head(elevated_co2_experiments)</code></pre>
-<pre><code>## # A tibble: 6 × 12
-##   Experi…¹ Citat…² Depth Sampl…³ Time_…⁴ SOC_a…⁵ SOC_e…⁶ n (am…⁷ n (in…⁸ Descr…⁹
-##   &lt;chr&gt;    &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt;     &lt;dbl&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt; &lt;chr&gt;  
-## 1 Arizona… Leavit… 0-15… Nov 95      0      1344    1228       4       4 fig. 3 
-## 2 Arizona… Leavit… 0-15… may 19…     0.5    1363    1305       4       4 fig. 3 
-## 3 Arizona… Leavit… 0-15… dec. 1…     1      1254    1264       4       4 fig. 3 
-## 4 Arizona… Leavit… 0-15… may 19…     1.5    1258    1400       4       4 fig. 3 
-## 5 Biosphe… Truema… 0-25… averag…     0      5950    6362       1       1 fig. 3 
-## 6 Biosphe… Truema… 0-25… averag…     1      5254    4735       1       1 fig. 3 
-## # … with 2 more variables: `Value treatment` &lt;chr&gt;, RR &lt;dbl&gt;, and abbreviated
-## #   variable names ¹​Experiment, ²​Citation, ³​`Sample date`, ⁴​Time_years,
-## #   ⁵​SOC_ambient, ⁶​SOC_elevated, ⁷​`n (ambient CO2)`, ⁸​`n (increased CO2)`,
-## #   ⁹​`Description of data source`</code></pre>
+  mutate(RR = log(SOC_elevated / SOC_ambient))</code></pre>
 <p>Lastly, I aggregate the data per experiment and calculate the
 log-response ratio within each experiment</p>
 <pre class="r"><code>RR_within_each_experiment &lt;- elevated_co2_experiments|&gt;
   group_by(Experiment) |&gt;
   summarise(RR = mean(RR))
-knitr::kable(RR_within_each_experiment)</code></pre>
+knitr::kable(RR_within_each_experiment, caption = &quot;Log-response ratio per experiment&quot;)</code></pre>
 <table>
+<caption>Log-response ratio per experiment</caption>
 <thead>
 <tr class="header">
 <th align="left">Experiment</th>
@@ -417,23 +397,7 @@ knitr::kable(RR_within_each_experiment)</code></pre>
 </tr>
 <tr class="even">
 <td align="left">Biosphere 2</td>
-<td align="right">0.0669516</td>
-</tr>
-<tr class="odd">
-<td align="left">Biosphere 3</td>
-<td align="right">-0.1040080</td>
-</tr>
-<tr class="even">
-<td align="left">Biosphere 4</td>
-<td align="right">-0.2401763</td>
-</tr>
-<tr class="odd">
-<td align="left">Biosphere 5</td>
-<td align="right">-0.2971109</td>
-</tr>
-<tr class="even">
-<td align="left">Biosphere 6</td>
-<td align="right">-0.2344538</td>
+<td align="right">-0.1617595</td>
 </tr>
 <tr class="odd">
 <td align="left">China FACE - high N</td>
@@ -641,51 +605,25 @@ knitr::kable(RR_within_each_experiment)</code></pre>
 </tr>
 </tbody>
 </table>
-</div>
-<div id="section-1" class="section level2">
-<h2>3.</h2>
 <p>I start the third part of this exercise with work space cleaning,
-removing the most recently created dataframe
+removing the most recently created data frame
 “RR_within_each_experiment”</p>
 <pre class="r"><code>rm(RR_within_each_experiment)</code></pre>
-<p>Now, I divide the dataframe into 3 different ones, distinguished by
-their respective year since the start of the experiment: The early, mid-
-and late phase. Lastly, I put these dataframes back together, so that it
-results in one table again</p>
-<pre class="r"><code>early_phase &lt;- elevated_co2_experiments |&gt;
-  filter(Time_years &lt; 3) |&gt;
-  mutate(phase = &quot;early&quot;)
-
-mid_phase &lt;- elevated_co2_experiments |&gt;
-  filter(Time_years &gt;= 3 &amp; Time_years &lt;= 6) |&gt;
-  mutate(phase = &quot;mid&quot;)
-
-late_phase &lt;- elevated_co2_experiments |&gt;
-  filter(Time_years &gt; 6) |&gt;
-  mutate(phase = &quot;late&quot;)
-
-end_table &lt;- bind_rows(early_phase, mid_phase, late_phase)
-head(end_table)</code></pre>
-<pre><code>## # A tibble: 6 × 13
-##   Experi…¹ Citat…² Depth Sampl…³ Time_…⁴ SOC_a…⁵ SOC_e…⁶ n (am…⁷ n (in…⁸ Descr…⁹
-##   &lt;chr&gt;    &lt;chr&gt;   &lt;chr&gt; &lt;chr&gt;     &lt;dbl&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt;   &lt;int&gt; &lt;chr&gt;  
-## 1 Arizona… Leavit… 0-15… Nov 95      0      1344    1228       4       4 fig. 3 
-## 2 Arizona… Leavit… 0-15… may 19…     0.5    1363    1305       4       4 fig. 3 
-## 3 Arizona… Leavit… 0-15… dec. 1…     1      1254    1264       4       4 fig. 3 
-## 4 Arizona… Leavit… 0-15… may 19…     1.5    1258    1400       4       4 fig. 3 
-## 5 Biosphe… Truema… 0-25… averag…     0      5950    6362       1       1 fig. 3 
-## 6 Biosphe… Truema… 0-25… averag…     1      5254    4735       1       1 fig. 3 
-## # … with 3 more variables: `Value treatment` &lt;chr&gt;, RR &lt;dbl&gt;, phase &lt;chr&gt;, and
-## #   abbreviated variable names ¹​Experiment, ²​Citation, ³​`Sample date`,
-## #   ⁴​Time_years, ⁵​SOC_ambient, ⁶​SOC_elevated, ⁷​`n (ambient CO2)`,
-## #   ⁸​`n (increased CO2)`, ⁹​`Description of data source`</code></pre>
+<p>Now, I add a new column to the initial data frame, indicating the
+phase the respective observation belongs to. The phases are: early, mid-
+and late phase</p>
+<pre class="r"><code>elevated_co2_experiments &lt;- elevated_co2_experiments |&gt;
+  mutate(phase = ifelse (Time_years &lt; 3, &quot;early&quot;, NA),
+         phase = ifelse (Time_years &gt;= 3 &amp; Time_years &lt;= 6, &quot;mid&quot;, phase),
+         phase = ifelse (Time_years &gt; 6, &quot;late&quot;, phase))</code></pre>
 <p>Now, I create a table which represents the log-response ratio for
 each of the three phases</p>
-<pre class="r"><code>result_table &lt;- end_table |&gt;
+<pre class="r"><code>result_table &lt;- elevated_co2_experiments |&gt;
   group_by(phase) |&gt;
   summarise(RR = mean(RR, na.rm = TRUE))
-knitr::kable(result_table)</code></pre>
+knitr::kable(result_table, caption = &quot;Log-response ratio per phase&quot;)</code></pre>
 <table>
+<caption>Log-response ratio per phase</caption>
 <thead>
 <tr class="header">
 <th align="left">phase</th>

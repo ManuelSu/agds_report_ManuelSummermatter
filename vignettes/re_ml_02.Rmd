@@ -4,9 +4,13 @@ author: "Manuel Summermatter"
 date: "2023-05-22"
 output: html_document
 ---
+## Introduction
+In this final report exercise, the role of structure in the data for model generalisability is explored. The focus lies on the analysis of "true" out-of-sample errors that occur when predicting to unseen data.
 
-First, I set up the work space
-```{r}
+
+## Methods and Results
+First, I set up the work space. I also slightly modified the function from the previous chapter and adapted it to the tasks of this exercise. Therefore, I load two functions into the environment
+```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(lubridate)
 library(caret)
@@ -15,8 +19,8 @@ source(paste0(here::here(), "/R/eval_model.R"))
 source(paste0(here::here(), "/R/eval_model_chapter_10.R"))
 ```
 
-Now, I load and prepare the data
-```{r}
+Now, I load and prepare the data, one data set for the Davos site and one for the Laegern site
+```{r, message = FALSE, warning = FALSE}
 fluxes_Davos <- read_csv(paste0(here::here(), "/data/FLX_CH-Dav_FLUXNET2015_FULLSET_DD_1997-2014_1-3.csv")) |>  
   dplyr::select(TIMESTAMP,
                 GPP_NT_VUT_REF,
@@ -58,21 +62,23 @@ fluxes_Laegern <- read_csv(paste0(here::here(), "/data/FLX_CH-Lae_FLUXNET2015_FU
 ```
 
 Now, I get an overview of the data
-```{r}
+```{r, message = FALSE, warning = FALSE}
 gridExtra::grid.arrange(
   fluxes_Davos |> 
     ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
     geom_histogram() +
-    labs(title = "Davos"),
+    labs(title = "Davos") +
+    theme_classic(),
   fluxes_Laegern |> 
     ggplot(aes(x = GPP_NT_VUT_REF, y = ..count..)) + 
     geom_histogram() +
-    labs(title = "Laegern")
+    labs(title = "Laegern") +
+    theme_classic()
 )
 ```
 
-What follows are further steps
-```{r}
+What follows are further steps, in which I split and pre-process the data for both sites, as well as build the KNN models
+```{r, message = FALSE, warning = FALSE}
 # Data splitting Davos
 set.seed(1982)
 split_Davos <- rsample::initial_split(fluxes_Davos, prop = 0.8, strata = "VPD_F")
@@ -120,12 +126,10 @@ mod_knn_Laegern <- caret::train(
   tuneGrid = data.frame(k = 8),
   metric = "RMSE"
 )
-
-# P_F variable in fluxes_Laegern_train has NA in every row, so after the drop_na() it drops every row and the dataframe is empty -> Then obviously the model can't work with this empty dataframe
 ```
 
 Now, I call the model evaluation function for the KNN model for Davos and Laegern, each tested within-site and across-site
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # KNN prediction for Davos, within-site
 eval_model_chapter_10(mod = mod_knn_Davos, df_train = fluxes_Davos_train, df_test = fluxes_Davos_test)
 
@@ -139,6 +143,7 @@ eval_model_chapter_10(mod = mod_knn_Laegern, df_train = fluxes_Laegern_train, df
 eval_model_chapter_10(mod = mod_knn_Laegern, df_train = fluxes_Laegern_train, df_test = fluxes_Davos_test)
 ```
 
+## Discussion
 The KNN model which is trained on the Davos site performs better when predicted on the within-site test set than on the across-site test set:  
 - R squared is 0.64 within-site and 0.48 across-site  
 - RMSE is 1.56 within-site and 3.52 across-site  
@@ -148,3 +153,68 @@ For the knn model which is trained on the Laegern site, the results point to the
 - R squared is 0.66 within-site and 0.49 across-site  
 - RMSE is 2.52 within-site and 2.64 across-site  
 - MAE is within-site 1.91 and 2.08 across-site
+
+
+In the following, I train the model with training data pooled from both sites and predict on the test data of both sides. I therefore firstly create the pooled dataset, out of the training data sets from the both sites. To ensure the optimal split between training and test set, I then divide this new pooled data set into to halfs and evaluate the model for both of these halfs. Then, I continue with pre-processing and model formulation with the newly created pooled training data set. Eventually, I evaluate this model on the test sets of both sites
+```{r, message = FALSE, warning = FALSE}
+fluxes_train_pooled <- bind_rows(fluxes_Davos_train, fluxes_Laegern_train)
+
+set.seed(1982)
+split_pooled <- rsample::initial_split(fluxes_train_pooled, prop = 0.5, strata = "VPD_F")
+fluxes_train_pooled_1 <- rsample::training(split_pooled)
+fluxes_train_pooled_2 <- rsample::testing(split_pooled)
+
+
+# Model and pre-processing formulation, use all variables but LW_IN_F (First half)
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = fluxes_train_pooled_1 |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+
+
+# KNN model (First half)
+mod_knn_pooled <- caret::train(
+  pp_Davos, 
+  data = fluxes_train_pooled_1 |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+
+# Test and evaluate the model on the test sets of both sites, first Davos and then Laegern (First half)
+eval_model_chapter_10(mod = mod_knn_pooled, df_train = fluxes_train_pooled_1, df_test = fluxes_Davos_test)
+eval_model_chapter_10(mod = mod_knn_pooled, df_train = fluxes_train_pooled_1, df_test = fluxes_Laegern_test)
+
+
+# Model and pre-processing formulation, use all variables but LW_IN_F (Second half)
+pp <- recipes::recipe(GPP_NT_VUT_REF ~ SW_IN_F + VPD_F + TA_F, 
+                      data = fluxes_train_pooled_2 |> drop_na()) |> 
+  recipes::step_BoxCox(all_predictors()) |> 
+  recipes::step_center(all_numeric(), -all_outcomes()) |>
+  recipes::step_scale(all_numeric(), -all_outcomes())
+
+
+
+# KNN model (Second half)
+mod_knn_pooled <- caret::train(
+  pp_Davos, 
+  data = fluxes_train_pooled_2 |> drop_na(), 
+  method = "knn",
+  trControl = caret::trainControl(method = "none"),
+  tuneGrid = data.frame(k = 8),
+  metric = "RMSE"
+)
+
+# Test and evaluate the model on the test sets of both sites, first Davos and then Laegern (Second half)
+eval_model_chapter_10(mod = mod_knn_pooled, df_train = fluxes_train_pooled_2, df_test = fluxes_Davos_test)
+eval_model_chapter_10(mod = mod_knn_pooled, df_train = fluxes_train_pooled_2, df_test = fluxes_Laegern_test)
+```
+
+The R squared from the model trained with the pooled data set performs better on the test sets than in the "true" out-of-sample setup from above, where the model got trained with data from one site and tested on data from another site. The RMSE and MAE have only minor differences. These findings point to the fact that model training can be done like this, as training a model on heterogenous data (here in the sense of multiple areas) can enhance the model's generalisability.  
+
+The Davos site has an altitude of 1639 m a.s.l., therefore its altitudinal zone is subalpine. Its vegetation is coniferous forest, with evergreen needleleaf forests. The mean annual air temperature is 4.3 Degrees Celsius, mean annual precipitation is 1020 mm.  
+The Laegern site has an altitude of 689 m a.s.l. It has a highly diverse forest, dominated by beech and fir. The average air temperature for the period 2005-2020 is 8.6 Degrees Celsius.  
+In the light of the out-of-sample predictions of the KNN models from before, the results pointed to the fact that the model trained on the data set for Laegern performed better on the across-site test set than the model trained on Davos data. This makes intuitively sense as the Davos site is exposed to a harsher environment than the Laegern site. Therefore, the probability is higher that there is more extreme data. This in turn leads to the fact that a model trained on this data, performs worse when tested on data which doesn't have so many "extreme" values.

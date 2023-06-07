@@ -6,19 +6,23 @@ output: html_document
 ---
 # Stepwise Forward Regression
 
+## Introduction
+The goal of this exercise is to implement stepwise forward regression, so to imitate what the step() function does. This algorithm starts with an empty linear regression model and increments the number of predictors step by step. It stops if the quality of the newest model doesn't increase anymore compared to the previous model. This previous model is then the presumably best model for prediction.
+
+
+## Methods and Results
 First, I set up the work space
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(lubridate)
 ```
 
-Now, I load and explore the data
+Now, I load the data
 ```{r, message = FALSE, warning = FALSE}
 half_hourly_fluxes <- read_csv(paste0(here::here(), "/data/df_for_stepwise_regression.csv"))
-summary(half_hourly_fluxes)
 ```
 
-# 1. Evaluation of all bivariate models (single predictor)
+First, I implement an evaluation of all bivariate models (single predictor). I therefore firstly create a data frame with only the predictors. I then initialize the list, into which the linear regression models get stored. Then, there follows a for loop which iterates over the predictors and calculates a linear model with it, storing them into the previously initialized list. To eventually judge which model serves as the best prediction, I calculate the R squared of all models and take the one with the highest value of R squared. This is then the best model with a single predictor, for the purpose of predicting GPP. I end this section with a visualization of the result, showing the scatter plot of the predictor variable of the best model and GPP, with the regression line.
 ```{r, message = FALSE, warning = FALSE}
 predictors <- half_hourly_fluxes |> 
   subset(select = -c(GPP_NT_VUT_REF, siteid, TIMESTAMP))
@@ -29,7 +33,6 @@ for (i in 1:length(predictors)) {
   linmod_1[[i]] <- lm(GPP_NT_VUT_REF ~ ., half_hourly_fluxes[ ,c("GPP_NT_VUT_REF", colnames(predictors)[i])])
 }
 
-# Compute the AIC of the model with the highest R squared
 R_squared <- c()
 for (i in 1:length(predictors)){
   R_squared[i] <- summary(linmod_1[[i]])$r.squared
@@ -37,22 +40,22 @@ for (i in 1:length(predictors)){
 
 best_model <- linmod_1[[which(R_squared == max(R_squared))]]
 
-AIC(best_model)
+summary(best_model)
 
 # Visualisation
 half_hourly_fluxes |>
   ggplot(aes(x = PPFD_IN, y = GPP_NT_VUT_REF)) +
   geom_point() +
   geom_smooth(formula = y ~ x, method = "lm", color = "red") +
-  labs(x = rownames(summary(best_model)$coefficients)[2], y = "GPP") +
+  labs(title = "GPP as a function of Photosynthetic Photon Flux Density", x = rownames(summary(best_model)$coefficients)[2], y = "GPP") +
   theme_classic()
 ```
 
-The evaluation of all bivariate linear regression models, so with one variable predicting GPP, yields that the variable PPFD_IN provides the best single-predictor model. This is the incoming photosynthetic photon flux density. Therefore, when considering only one explanatory variable, Gross Primary Production can be linearly predicted best with incoming photosynthetic photon flux density. An increase in incoming photosynthetic photon flux density of one unit leads to an increase in GPP of 0.01062.
+The evaluation of all bivariate linear regression models, so with one variable predicting GPP, yields that the variable PPFD_IN provides the best single-predictor model. This is the incoming photosynthetic photon flux density. Therefore, when considering only one explanatory variable, Gross Primary Production can best be linearly predicted with incoming photosynthetic photon flux density. An increase in incoming photosynthetic photon flux density of one unit leads to an increase in GPP of 0.01062.
 
 
-# 2. Stepwise forward regression
-First, I remove the stored values from the previous exercise which I don't need, so that only the half_hourly_fluxes and predictors data sets remain. Then, I initialize some variables and implement the stepwise forward regression in two for loops, which are nested into each other
+Now, I implement the whole algorithm of stepwise forward regression.  
+First, I remove the stored values from the previous exercise which I don't need, so that only the half_hourly_fluxes and predictors data sets remain. Then, I initialize some variables and implement the stepwise forward regression in two for loops, which are nested into each other. The first for loop stands for the iterations of the number of predictors, and the second for loop implements the calculation and allocation of the linear regression model with the respective predictors. The whole loop ends, if the AIC of the current best model is greater than the AIC of the best model from the previous iteration. This latter best model is then the presumably best model over all the number of predictors.
 ```{r, message = FALSE, warning = FALSE}
 rm(best_model, linmod_1, i, R_squared)
 
@@ -94,6 +97,8 @@ best_model
 formula(best_model)
 ```
 
+
+## Discussion
 The algorithm concludes with the best model, which has the following formula: GPP_NT_VUT_REF ~ TA_F + SW_IN_F + LW_IN_F + VPD_F + PA_F + P_F + WS_F.  
 The combination of these 7 variables yields the best linear model to predict GPP. The variables are the following:  
 - TA_F = Air temperature  
@@ -116,7 +121,7 @@ These are:
 - PPFD_IN = Photosynthetic photon flux density, incoming  
 - USTAR = Friction velocity  
 
-One can observe that LW_IN_F_MDS and VPD_F_MDS are just slightly modified variables to the selected ones, LW_IN_F and VPD_F. It is therefore assumable that there is a large correlation of these two variable couples, and therefore, adding the other ones would not significantly help in explaining more of the variance of GPP. That's why they haven't got selected into the best model. Furthermore, it seems that CO2 mole fraction, photosynthetic photon flux density and friction velocity don't add enough to the explanation of the variance in Gross Primary Production
+One can observe that LW_IN_F_MDS and VPD_F_MDS are just slightly modified variables to the selected ones, LW_IN_F and VPD_F. It is therefore assumable that there is a large correlation of these two variable couples, and therefore, adding the other ones would not significantly help in explaining more of the variance of GPP. That's why they haven't got selected into the best model. Furthermore, it seems that CO2 mole fraction, photosynthetic photon flux density and friction velocity don't add enough to the explanation of the variance in Gross Primary Production.
 
 To demonstrate this, I extend the best model with LW_IN_F_MDS
 ```{r, message = FALSE, warning = FALSE}
@@ -129,7 +134,7 @@ summary(best_model_extended)
 
 It shows that the best model has a larger R squared than the best model extended with the extra variable. Also, the first one has a smaller residual standard error. And lastly, the coefficient for LW_IN_F_MDS is not significantly different from zero. These observations show that extending the model with the used variable (LW_IN_F_MDS) would decrease the model's accuracy in predicting GPP, so it's better to leave this variable out of the model. The same applies for all the variables which haven't been selected by the stepwise forward regression algorithm.
 
-Lastly, I plot the fitted values of the best model against the actual values of GPP. This shows the accuraccy of the best model in a graphical way
+Lastly, I plot the fitted values of the best model against the actual values of GPP. This shows the accuracy of the best model in a graphical way
 ```{r, message = FALSE, warning = FALSE}
 half_hourly_fluxes <- half_hourly_fluxes |>
   mutate(fitted = predict(best_model, half_hourly_fluxes))

@@ -6,19 +6,21 @@ output: html_document
 ---
 # Cleaning data from elevated CO2 experiments
 
-## 2.
+## Introduction
+The goal of this exercise is to clean and aggregate data from elevated CO2 experiments. The data set is taken from the paper of Van Groenigen et al. (2014), "Faster Decomposition Under Increased Atmospheric CO2 Limits Soil Carbon Storage"
+
+
+## Methods and Results
 First, I set up the work space and load the data which I have manually cleaned in excel
 ```{r, message = FALSE, warning = FALSE}
 library(tidyverse)
 elevated_co2_experiments <- read_delim("C:/Manuel Summermatter/Bachelorstudium/6. Semester/Applied Geodata Science I/agds_report_ManuelSummermatter/data/Elevated_CO2_Experiments.csv", col_types = "cccc?iiiicc", skip = 3)
-head(elevated_co2_experiments)
 ```
 
 Now, I add a new column to the dataframe: The log-response ratio (RR)
 ```{r}
 elevated_co2_experiments <-  elevated_co2_experiments |>
   mutate(RR = log(SOC_elevated / SOC_ambient))
-head(elevated_co2_experiments)
 ```
 
 Lastly, I aggregate the data per experiment and calculate the log-response ratio within each experiment
@@ -26,26 +28,20 @@ Lastly, I aggregate the data per experiment and calculate the log-response ratio
 RR_within_each_experiment <- elevated_co2_experiments|>
   group_by(Experiment) |>
   summarise(RR = mean(RR))
-knitr::kable(RR_within_each_experiment)
+knitr::kable(RR_within_each_experiment, caption = "Log-response ratio per experiment")
 ```
 
-## 3.
-I start the third part of this exercise with work space cleaning, removing the most recently created dataframe "RR_within_each_experiment"
+I start the third part of this exercise with work space cleaning, removing the most recently created data frame "RR_within_each_experiment"
 ```{r}
 rm(RR_within_each_experiment)
 ```
 
-Now, I divide the dataframe into 3 different ones, distinguished by their respective year since the start of the experiment: The early, mid- and late phase. Lastly, I put these dataframes back together, so that it results in one table again
+Now, I add a new column to the initial data frame, indicating the phase the respective observation belongs to. The phases are: early, mid- and late phase
 ```{r}
 elevated_co2_experiments <- elevated_co2_experiments |>
   mutate(phase = ifelse (Time_years < 3, "early", NA),
          phase = ifelse (Time_years >= 3 & Time_years <= 6, "mid", phase),
          phase = ifelse (Time_years > 6, "late", phase))
-
-head(elevated_co2_experiments)
-
-elevated_co2_experiments |>
-  filter(phase == "early")
 ```
 
 Now, I create a table which represents the log-response ratio for each of the three phases
