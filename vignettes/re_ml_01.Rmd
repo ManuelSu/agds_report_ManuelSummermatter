@@ -2,7 +2,7 @@
 title: "9.4 Report Exercise"
 author: "Manuel Summermatter"
 date: "2023-05-15"
-output: html_document
+output: html_document:
 ---
 # Comparison of the linear regression and KNN models
 ## Introduction
